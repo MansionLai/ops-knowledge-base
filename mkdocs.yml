@@ -1,0 +1,28 @@
+site_name: Ops Knowledge Base
+site_description: 基礎設施維運與故障排除知識庫
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.tabs
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - 首頁: index.md
+  - Ceph:
+      - Networking: ceph/networking-bond-rx-error.md
+  - Kubernetes: k8s/.gitkeep
+  - KubeVirt: kubevirt/.gitkeep
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
