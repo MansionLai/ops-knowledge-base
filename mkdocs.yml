@@ -15,7 +15,8 @@ nav:
   - Ceph:
       - Networking: ceph/networking-bond-rx-error.md
   - Kubernetes: k8s/.gitkeep
-  - KubeVirt: kubevirt/.gitkeep
+  - KubeVirt:
+      - Downgrade Issue (v1.7.2 to v1.6.4): kubevirt/downgrade-v1.7.2-to-v1.6.4.md
 
 plugins:
   - search
