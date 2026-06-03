@@ -4,3 +4,4 @@
 
 ## 快速索引
 - [Ceph 網路故障診斷](./ceph/networking-bond-rx-error.md)
+- [KubeVirt 降級異常處理 (v1.7.2 -> v1.6.4)](./kubevirt/downgrade-v1.7.2-to-v1.6.4.md)
