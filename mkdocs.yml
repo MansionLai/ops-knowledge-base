@@ -1,5 +1,6 @@
 site_name: Ops Knowledge Base
 site_description: 基礎設施維運與故障排除知識庫
+site_url: https://kms.mansionlai.com/
 theme:
   name: material
   palette:
