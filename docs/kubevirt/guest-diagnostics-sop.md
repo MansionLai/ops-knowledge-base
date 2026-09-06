@@ -118,8 +118,8 @@ $ComputerName   = $env:COMPUTERNAME
 $DiagRoot       = "vm_diag_${ComputerName}_${Timestamp}"
 $PermissionErrors = [System.Collections.Generic.List[string]]::new()
 
-# Resolve output path
-if ([string]::IsNullOrWhiteSpace($OutputPath)) { $OutputPath = $env:TEMP }
+# Resolve output path: default to same directory as the script
+if ([string]::IsNullOrWhiteSpace($OutputPath)) { $OutputPath = $PSScriptRoot }
 $DiagPath = Join-Path $OutputPath $DiagRoot
 
 # Parse time range
