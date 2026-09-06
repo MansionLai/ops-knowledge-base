@@ -21,6 +21,16 @@ param(
 Set-StrictMode -Off
 $ErrorActionPreference = "SilentlyContinue"
 
+# Detect OS type for compatibility branching
+$OSInfo       = Get-CimInstance Win32_OperatingSystem
+$OSCaption    = $OSInfo.Caption
+$OSBuild      = [int]$OSInfo.BuildNumber
+$IsServerOS   = $OSCaption -match "Server"
+$IsWin11      = (-not $IsServerOS) -and $OSBuild -ge 22000
+$IsWin2019    = $OSCaption -match "2019"
+$IsWin2022    = $OSCaption -match "2022"
+$IsWin2025    = $OSCaption -match "2025"
+
 # ---------------------------------------------------------------------------
 # 0. INITIALIZATION
 # ---------------------------------------------------------------------------
@@ -697,29 +707,34 @@ Write-FileHeader $f "Antivirus / Security Product Status" `
     "Installed AV and security products via WMI SecurityCenter2." `
     "productState encodes enabled/disabled and up-to-date status. Multiple conflicting AVs can cause coverage gaps."
 Invoke-CollectBlock $f {
-    "--- AntiVirusProduct (SecurityCenter2) ---"
-    $avProducts = Get-CimInstance -Namespace "root/SecurityCenter2" -ClassName AntiVirusProduct -ErrorAction SilentlyContinue
-    if ($avProducts) {
-        $avProducts | ForEach-Object {
-            $state = $_.productState
-            $rtEnabled   = ($state -band 0x1000) -ne 0
-            $defUpToDate = ($state -band 0x0010) -eq 0
-            [PSCustomObject]@{
-                DisplayName         = $_.displayName
-                ProductState        = "0x{0:X6}" -f $state
-                RealtimeEnabled     = $rtEnabled
-                DefinitionsUpToDate = $defUpToDate
-                PathToExe           = $_.pathToSignedProductExe
-                Timestamp           = $_.timestamp
-            } | Format-List
-        }
+    "--- AntiVirusProduct / FirewallProduct (SecurityCenter2) ---"
+    if ($IsServerOS) {
+        "SecurityCenter2 WMI namespace is not available on Windows Server editions."
+        "Use Windows Defender status below instead."
     } else {
-        "No AntiVirus products found via SecurityCenter2 (may need to run on workstation OS)"
+        $avProducts = Get-CimInstance -Namespace "root/SecurityCenter2" -ClassName AntiVirusProduct -ErrorAction SilentlyContinue
+        if ($avProducts) {
+            $avProducts | ForEach-Object {
+                $state = $_.productState
+                $rtEnabled   = ($state -band 0x1000) -ne 0
+                $defUpToDate = ($state -band 0x0010) -eq 0
+                [PSCustomObject]@{
+                    DisplayName         = $_.displayName
+                    ProductState        = "0x{0:X6}" -f $state
+                    RealtimeEnabled     = $rtEnabled
+                    DefinitionsUpToDate = $defUpToDate
+                    PathToExe           = $_.pathToSignedProductExe
+                    Timestamp           = $_.timestamp
+                } | Format-List
+            }
+        } else {
+            "No AntiVirus products found via SecurityCenter2."
+        }
+        ""
+        "--- FirewallProduct (SecurityCenter2) ---"
+        Get-CimInstance -Namespace "root/SecurityCenter2" -ClassName FirewallProduct -ErrorAction SilentlyContinue |
+            Format-List displayName, productState, pathToSignedProductExe
     }
-    ""
-    "--- FirewallProduct (SecurityCenter2) ---"
-    Get-CimInstance -Namespace "root/SecurityCenter2" -ClassName FirewallProduct -ErrorAction SilentlyContinue |
-        Format-List displayName, productState, pathToSignedProductExe
     ""
     "--- Windows Defender Status (Get-MpComputerStatus) ---"
     $mpStatus = Get-MpComputerStatus -ErrorAction SilentlyContinue
@@ -884,6 +899,414 @@ Invoke-CollectBlock $f {
     Get-ItemProperty -Path $crashKey -ErrorAction SilentlyContinue |
         Select-Object CrashDumpEnabled, DumpFile, MiniDumpDir, AutoReboot | Format-List
 }
+
+# ===========================================================================
+# SUMMARY_FOR_AI.txt  -- Condensed report optimized for AI-assisted analysis
+# ===========================================================================
+Write-Host "" 
+Write-Host "Generating SUMMARY_FOR_AI.txt..." -ForegroundColor Cyan
+$aiFile = Join-Path $DiagPath "SUMMARY_FOR_AI.txt"
+
+$aiLines = [System.Collections.Generic.List[string]]::new()
+function AI { param([string]$line = "") $aiLines.Add($line) }
+
+AI "================================================================================"
+AI "  WINDOWS GUEST DIAGNOSTIC SUMMARY — FOR AI-ASSISTED ANALYSIS"
+AI "================================================================================"
+AI "  Computer    : $ComputerName"
+AI "  OS          : $OSCaption"
+AI "  Build       : $OSBuild  |  Type: $(if($IsServerOS){'Server'}else{'Desktop'})"
+AI "  Collected   : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  [Timezone: $(([System.TimeZoneInfo]::Local).DisplayName)]"
+AI "  Time Range  : $($dtStart.ToString('yyyy-MM-dd HH:mm')) -> $($dtEnd.ToString('yyyy-MM-dd HH:mm'))"
+AI "  Run As Admin: $IsAdmin"
+AI "================================================================================"
+AI ""
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  HOW TO USE"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  1. Share this file with an AI assistant (ChatGPT, Claude, Gemini, etc.)"
+AI "  2. Use the prompt template in the next section"
+AI "  3. If the AI needs more detail, share the specific .txt file from the ZIP"
+AI ""
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  PROMPT TEMPLATE (copy and paste to AI, then attach this file)"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI ""
+AI "You are an expert Windows systems administrator performing incident analysis."
+AI "The attached file is a diagnostic summary from a Windows VM (running in a"
+AI "KubeVirt virtualization environment). Please analyze and provide:"
+AI "  1. Overall system health assessment"
+AI "  2. Root cause of reported issues (if any)"
+AI "  3. Security concerns"
+AI "  4. Recommended next steps"
+AI ""
+AI "Incident context: [USER: describe the symptoms here, e.g. 'high CPU around 09:30']"
+AI ""
+AI "If you need more detail on any area, ask me to share the specific log file"
+AI "from the diagnostic ZIP package (e.g. '02_event_logs/system_events.txt')."
+AI ""
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [1] SYSTEM IDENTITY"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    $osObj  = Get-CimInstance Win32_OperatingSystem
+    $uptime = $osObj.LocalDateTime - $osObj.LastBootUpTime
+    $cs     = Get-CimInstance Win32_ComputerSystem
+    $cpu    = Get-CimInstance Win32_Processor | Select-Object -First 1
+    $totalRAM = [math]::Round($osObj.TotalVisibleMemorySize / 1MB, 1)
+    $freeRAM  = [math]::Round($osObj.FreePhysicalMemory  / 1MB, 1)
+    $usedRAMpct = [math]::Round((($osObj.TotalVisibleMemorySize - $osObj.FreePhysicalMemory) / $osObj.TotalVisibleMemorySize) * 100, 1)
+    AI "  Hostname    : $ComputerName"
+    AI "  OS          : $($osObj.Caption) Build $($osObj.BuildNumber)"
+    AI "  Last Boot   : $($osObj.LastBootUpTime.ToString('yyyy-MM-dd HH:mm:ss'))"
+    AI "  Uptime      : $($uptime.Days)d $($uptime.Hours)h $($uptime.Minutes)m"
+    AI "  CPU         : $($cpu.Name) | Cores: $($cpu.NumberOfCores) | Logical: $($cpu.NumberOfLogicalProcessors)"
+    AI "  RAM Total   : $totalRAM GB  |  Free: $freeRAM GB  |  Used: $usedRAMpct%"
+    AI "  Domain      : $($cs.Domain)  |  Model: $($cs.Model)"
+    $tz = [System.TimeZoneInfo]::Local
+    AI "  TimeZone    : $($tz.DisplayName)  (UTC$($tz.BaseUtcOffset.Hours.ToString('+0;-#')))"
+} catch { AI "  [ERROR collecting system identity: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [2] ⚠️  AUTO-DETECTED ALERTS"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+$alertCount = 0
+
+# Disk space alerts
+try {
+    Get-CimInstance Win32_LogicalDisk | Where-Object { $_.Size -gt 0 -and $_.DriveType -eq 3 } | ForEach-Object {
+        $freePct = [math]::Round(($_.FreeSpace / $_.Size) * 100, 1)
+        $freeGB  = [math]::Round($_.FreeSpace / 1GB, 1)
+        if ($freePct -lt 10) {
+            AI "  [DISK CRITICAL] $($_.DeviceID) is $([math]::Round(100-$freePct,1))% full — only $freeGB GB remaining!"
+            $alertCount++
+        } elseif ($freePct -lt 20) {
+            AI "  [DISK WARNING]  $($_.DeviceID) is $([math]::Round(100-$freePct,1))% full — $freeGB GB remaining"
+            $alertCount++
+        }
+    }
+} catch {}
+
+# RAM usage alert
+try {
+    $osObj2 = Get-CimInstance Win32_OperatingSystem
+    $ramUsed = [math]::Round((($osObj2.TotalVisibleMemorySize - $osObj2.FreePhysicalMemory) / $osObj2.TotalVisibleMemorySize) * 100, 1)
+    if ($ramUsed -gt 90) { AI "  [RAM CRITICAL]  Physical memory usage is $ramUsed%"; $alertCount++ }
+    elseif ($ramUsed -gt 80) { AI "  [RAM WARNING]   Physical memory usage is $ramUsed%"; $alertCount++ }
+} catch {}
+
+# Pagefile usage
+try {
+    $pf = Get-CimInstance Win32_PageFileUsage | Select-Object -First 1
+    if ($pf -and $pf.AllocatedBaseSize -gt 0) {
+        $pfPct = [math]::Round(($pf.CurrentUsage / $pf.AllocatedBaseSize) * 100, 1)
+        if ($pfPct -gt 80) { AI "  [PAGEFILE WARN] Pagefile usage is $pfPct% ($($pf.CurrentUsage) MB / $($pf.AllocatedBaseSize) MB)"; $alertCount++ }
+    }
+} catch {}
+
+# QEMU-GA status
+try {
+    $qemuSvc = Get-Service -Name "QEMU-GA" -ErrorAction SilentlyContinue
+    if (-not $qemuSvc) {
+        AI "  [QEMU-GA MISSING]  QEMU Guest Agent is NOT installed — KubeVirt memory metrics UNRELIABLE"
+        $alertCount++
+    } elseif ($qemuSvc.Status -ne "Running") {
+        AI "  [QEMU-GA STOPPED]  QEMU Guest Agent is installed but NOT running (Status: $($qemuSvc.Status))"
+        $alertCount++
+    }
+} catch {}
+
+# Auto-start services that are stopped
+try {
+    $stoppedSvcs = Get-CimInstance Win32_Service | Where-Object {
+        $_.StartMode -eq "Auto" -and $_.State -ne "Running" -and
+        $_.Name -notin @("MapsBroker","NetTcpPortSharing","RemoteRegistry","shpamsvc","tzautoupdate","XblAuthManager","XblGameSave","XboxGipSvc","XboxNetApiSvc")
+    }
+    foreach ($svc in $stoppedSvcs) {
+        AI "  [SVC STOPPED]   Auto-start service not running: '$($svc.Name)' ($($svc.DisplayName))"
+        $alertCount++
+    }
+} catch {}
+
+# WER crash reports in range
+try {
+    $werDirs = @(
+        "$env:ProgramData\Microsoft\Windows\WER\ReportQueue",
+        "$env:ProgramData\Microsoft\Windows\WER\ReportArchive",
+        "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportQueue",
+        "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive"
+    )
+    $crashCount = 0
+    foreach ($dir in $werDirs) {
+        if (Test-Path $dir) {
+            $crashCount += (Get-ChildItem $dir -Directory -ErrorAction SilentlyContinue | Where-Object {
+                $_.CreationTime -ge $dtStart -and $_.CreationTime -le $dtEnd }).Count
+        }
+    }
+    if ($crashCount -gt 0) { AI "  [CRASH REPORTS] $crashCount WER crash report(s) found in the specified time range"; $alertCount++ }
+} catch {}
+
+# Minidumps in range
+try {
+    $dumpPath = "$env:SystemRoot\Minidump"
+    if (Test-Path $dumpPath) {
+        $recentDumps = (Get-ChildItem $dumpPath -Filter "*.dmp" -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $dtStart -and $_.LastWriteTime -le $dtEnd }).Count
+        if ($recentDumps -gt 0) { AI "  [BSOD DETECTED] $recentDumps minidump file(s) in time range — system experienced BSOD(s)"; $alertCount++ }
+    }
+} catch {}
+
+# Defender real-time protection
+try {
+    $mp = Get-MpComputerStatus -ErrorAction SilentlyContinue
+    if ($mp -and -not $mp.RealTimeProtectionEnabled) { AI "  [SECURITY] Windows Defender real-time protection is DISABLED"; $alertCount++ }
+    if ($mp -and $mp.AntivirusSignatureAge -gt 7) { AI "  [SECURITY] Defender signatures are $($mp.AntivirusSignatureAge) days old (>7 days)"; $alertCount++ }
+} catch {}
+
+if ($alertCount -eq 0) { AI "  No critical alerts auto-detected." }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [3] CRITICAL EVENTS IN TIME RANGE (Level >= Warning)"
+AI "  Range: $($dtStart.ToString('yyyy-MM-dd HH:mm')) -> $($dtEnd.ToString('yyyy-MM-dd HH:mm'))"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    # Priority Event IDs (OOM, BSOD, Crash, Hang, Kernel)
+    $priorityIds = @(41, 6008, 2004, 1001, 1002, 1000, 7034, 7031, 7036, 1074)
+    $priorityEvts = @()
+    foreach ($log in @("System","Application")) {
+        $evts = Get-WinEvent -FilterHashtable @{LogName=$log; StartTime=$dtStart; EndTime=$dtEnd; Level=1,2,3} -ErrorAction SilentlyContinue
+        if ($evts) { $priorityEvts += $evts }
+    }
+    # Include priority IDs even if they're not Error/Critical
+    foreach ($log in @("System","Application")) {
+        $evts = Get-WinEvent -FilterHashtable @{LogName=$log; StartTime=$dtStart; EndTime=$dtEnd; Id=$priorityIds} -ErrorAction SilentlyContinue
+        if ($evts) { $priorityEvts += $evts }
+    }
+    $priorityEvts = $priorityEvts | Sort-Object TimeCreated -Descending | Select-Object -Unique TimeCreated, Id, LevelDisplayName, LogName, ProviderName, Message
+    if ($priorityEvts) {
+        AI "  Total: $($priorityEvts.Count) event(s)"
+        AI ""
+        foreach ($e in ($priorityEvts | Select-Object -First 50)) {
+            $shortMsg = ($e.Message -replace "`r`n|`n", " ").Substring(0, [Math]::Min(($e.Message -replace "`r`n|`n", " ").Length, 250))
+            AI "  [$($e.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss'))] [ID:$($e.Id)] [$($e.LevelDisplayName)] [$($e.LogName)] $shortMsg"
+        }
+        if ($priorityEvts.Count -gt 50) { AI "  ... ($(($priorityEvts.Count - 50)) more events — see 02_event_logs/ for full list)" }
+    } else {
+        AI "  No Warning/Error/Critical events found in the specified time range."
+    }
+} catch { AI "  [ERROR collecting events: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [4] TOP 15 PROCESSES BY MEMORY (Working Set)"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    $procs = Get-CimInstance Win32_Process | Sort-Object WorkingSetSize -Descending | Select-Object -First 15
+    AI "  {'Rank',-4} {'PID',-7} {'Name',-30} {'WS(MB)',-10} {'CPU(s)',-10} Owner"
+    AI "  $('-'*80)"
+    $rank = 1
+    foreach ($p in $procs) {
+        $owner = $p.GetOwner()
+        $ownerStr = if ($owner.User) { "$($owner.Domain)\$($owner.User)" } else { "N/A" }
+        $cpuSec = try { [math]::Round($p.UserModeTime / 1e7 + $p.KernelModeTime / 1e7, 1) } catch { "N/A" }
+        $wsMB = [math]::Round($p.WorkingSetSize / 1MB, 1)
+        AI "  $('{0,-4}' -f $rank) $('{0,-7}' -f $p.ProcessId) $('{0,-30}' -f $p.Name) $('{0,-10}' -f $wsMB) $('{0,-10}' -f $cpuSec) $ownerStr"
+        $rank++
+    }
+} catch { AI "  [ERROR: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [5] TOP 15 PROCESSES BY CPU TIME"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    $cpuProcs = Get-CimInstance Win32_Process |
+        Select-Object ProcessId, Name, WorkingSetSize,
+            @{N="TotalCPUsec";E={[math]::Round(($_.UserModeTime + $_.KernelModeTime)/1e7,1)}} |
+        Sort-Object TotalCPUsec -Descending | Select-Object -First 15
+    AI "  {'Rank',-4} {'PID',-7} {'Name',-30} {'CPU(s)',-12} WS(MB)"
+    AI "  $('-'*70)"
+    $rank = 1
+    foreach ($p in $cpuProcs) {
+        AI "  $('{0,-4}' -f $rank) $('{0,-7}' -f $p.ProcessId) $('{0,-30}' -f $p.Name) $('{0,-12}' -f $p.TotalCPUsec) $([math]::Round($p.WorkingSetSize/1MB,1))"
+        $rank++
+    }
+} catch { AI "  [ERROR: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [6] STORAGE STATUS"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | ForEach-Object {
+        $freePct = if ($_.Size -gt 0) { [math]::Round(($_.FreeSpace / $_.Size) * 100, 1) } else { 0 }
+        $freeGB  = [math]::Round($_.FreeSpace / 1GB, 1)
+        $totalGB = [math]::Round($_.Size / 1GB, 1)
+        $flag = if ($freePct -lt 10) { " ← CRITICAL" } elseif ($freePct -lt 20) { " ← WARNING" } else { "" }
+        AI "  $($_.DeviceID)  Total: $totalGB GB  Free: $freeGB GB ($freePct%)$flag"
+    }
+} catch { AI "  [ERROR: $_]" }
+try {
+    $pfUsage = Get-CimInstance Win32_PageFileUsage | Select-Object -First 1
+    if ($pfUsage) {
+        AI "  Pagefile: $($pfUsage.CurrentUsage) MB used / $($pfUsage.AllocatedBaseSize) MB allocated (Peak: $($pfUsage.PeakUsage) MB)"
+    }
+} catch {}
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [7] SERVICES — Auto-start but STOPPED"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    $knownOk = @("MapsBroker","NetTcpPortSharing","RemoteRegistry","shpamsvc","tzautoupdate",
+                 "XblAuthManager","XblGameSave","XboxGipSvc","XboxNetApiSvc","wisvc",
+                 "WbioSrvc","PimIndexMaintenanceSvc","OneSyncSvc")
+    $stopped = Get-CimInstance Win32_Service | Where-Object {
+        $_.StartMode -eq "Auto" -and $_.State -ne "Running" -and $_.Name -notin $knownOk
+    }
+    if ($stopped) {
+        foreach ($s in $stopped) {
+            AI "  [STOPPED] $($s.Name.PadRight(35)) $($s.DisplayName)"
+        }
+    } else { AI "  All expected auto-start services are running." }
+} catch { AI "  [ERROR: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [8] WER CRASH REPORTS (in time range)"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    $werDirs = @(
+        "$env:ProgramData\Microsoft\Windows\WER\ReportQueue",
+        "$env:ProgramData\Microsoft\Windows\WER\ReportArchive",
+        "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportQueue",
+        "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive"
+    )
+    $allCrashes = @()
+    foreach ($dir in $werDirs) {
+        if (Test-Path $dir) {
+            $allCrashes += Get-ChildItem $dir -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.CreationTime -ge $dtStart -and $_.CreationTime -le $dtEnd }
+        }
+    }
+    if ($allCrashes) {
+        foreach ($r in ($allCrashes | Sort-Object CreationTime -Descending | Select-Object -First 20)) {
+            $werFile = Join-Path $r.FullName "Report.wer"
+            $appName = if (Test-Path $werFile) {
+                (Get-Content $werFile -ErrorAction SilentlyContinue | Select-String "AppName") -replace ".*AppName.*?=\s*",""
+            } else { "(no Report.wer)" }
+            AI "  [$($r.CreationTime.ToString('yyyy-MM-dd HH:mm:ss'))] $($r.Name)  App: $appName"
+        }
+    } else { AI "  No crash reports in the specified time range." }
+} catch { AI "  [ERROR: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [9] STARTUP ITEMS (non-Microsoft / non-Windows)"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    $runKeys = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+    )
+    $startupFound = $false
+    foreach ($key in $runKeys) {
+        $props = Get-ItemProperty -Path $key -ErrorAction SilentlyContinue
+        if ($props) {
+            $props.PSObject.Properties | Where-Object { $_.Name -notlike "PS*" } | ForEach-Object {
+                $val = $_.Value
+                $isMicrosoft = $val -match "Microsoft|Windows\\System32|Windows\\SysWOW64"
+                if (-not $isMicrosoft) {
+                    AI "  [$key]"
+                    AI "    Name : $($_.Name)"
+                    AI "    Value: $val"
+                    AI ""
+                    $startupFound = $true
+                }
+            }
+        }
+    }
+    if (-not $startupFound) { AI "  No non-Microsoft startup items found in registry Run keys." }
+} catch { AI "  [ERROR: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [10] ACTIVE CONNECTIONS (ESTABLISHED, non-loopback)"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    $procMap2 = @{}
+    Get-Process | ForEach-Object { $procMap2[$_.Id] = $_.Name }
+    $conns = Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue |
+        Where-Object { $_.RemoteAddress -ne "127.0.0.1" -and $_.RemoteAddress -ne "::1" } |
+        Sort-Object RemoteAddress
+    if ($conns) {
+        AI "  {'LocalAddr:Port',-25} {'RemoteAddr:Port',-25} {'PID',-7} Process"
+        AI "  $('-'*75)"
+        foreach ($c in ($conns | Select-Object -First 40)) {
+            $local  = "$($c.LocalAddress):$($c.LocalPort)"
+            $remote = "$($c.RemoteAddress):$($c.RemotePort)"
+            $pname  = $procMap2[$c.OwningProcess]
+            AI "  $('{0,-25}' -f $local) $('{0,-25}' -f $remote) $('{0,-7}' -f $c.OwningProcess) $pname"
+        }
+        if ($conns.Count -gt 40) { AI "  ... ($($conns.Count - 40) more — see 04_network/active_connections.txt)" }
+    } else { AI "  No established non-loopback TCP connections." }
+} catch { AI "  [ERROR: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [11] SECURITY SUMMARY (Event Counts in Time Range)"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    $secIds = @(
+        @{Id=4625; Label="Failed Logons (brute force indicator if >10)"},
+        @{Id=4720; Label="User Accounts Created"},
+        @{Id=4726; Label="User Accounts Deleted"},
+        @{Id=4672; Label="Special Privilege Logons (admin-level)"},
+        @{Id=1102; Label="Audit Log Cleared (tampering indicator)"}
+    )
+    foreach ($item in $secIds) {
+        try {
+            $cnt = (Get-WinEvent -FilterHashtable @{LogName="Security"; Id=$item.Id; StartTime=$dtStart; EndTime=$dtEnd} -ErrorAction Stop).Count
+            $flag = ""
+            if ($item.Id -eq 4625 -and $cnt -gt 10) { $flag = " ← SUSPICIOUS" }
+            if ($item.Id -eq 1102 -and $cnt -gt 0)  { $flag = " ← ALERT: LOG TAMPERING" }
+            if ($item.Id -eq 4720 -and $cnt -gt 0)  { $flag = " ← REVIEW REQUIRED" }
+            AI "  ID $($item.Id): $cnt event(s)  — $($item.Label)$flag"
+        } catch {
+            AI "  ID $($item.Id): (access denied or log unavailable) — $($item.Label)"
+        }
+    }
+} catch { AI "  [ERROR collecting security summary: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  [12] INSTALLED SOFTWARE (Last 30 Days)"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+try {
+    $cutoff = (Get-Date).AddDays(-30).ToString("yyyyMMdd")
+    $recentApps = @()
+    foreach ($path in @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+                        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*")) {
+        $recentApps += Get-ItemProperty $path -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -and $_.InstallDate -ge $cutoff } |
+            Select-Object DisplayName, DisplayVersion, Publisher, InstallDate
+    }
+    if ($recentApps) {
+        $recentApps | Sort-Object InstallDate -Descending | ForEach-Object {
+            AI "  [$($_.InstallDate)] $($_.DisplayName) $($_.DisplayVersion)  by $($_.Publisher)"
+        }
+    } else { AI "  No software installed in the past 30 days." }
+} catch { AI "  [ERROR: $_]" }
+AI ""
+
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "  END OF SUMMARY — See individual files in ZIP for full details"
+AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+$aiLines | Set-Content -Path $aiFile -Encoding UTF8
+Write-Host "  -> SUMMARY_FOR_AI.txt written ($($aiLines.Count) lines)" -ForegroundColor Green
 
 # ===========================================================================
 # COMPRESS OUTPUT
