@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://kms.mansionlai.com/</loc>
+         <lastmod>2026-09-06</lastmod>
+    </url>
+    <url>
+         <loc>https://kms.mansionlai.com/ceph/networking-bond-rx-error/</loc>
+         <lastmod>2026-09-06</lastmod>
+    </url>
+    <url>
+         <loc>https://kms.mansionlai.com/kubevirt/downgrade-v1.7.2-to-v1.6.4/</loc>
+         <lastmod>2026-09-06</lastmod>
+    </url>
+    <url>
+         <loc>https://kms.mansionlai.com/kubevirt/guest-diagnostics-linux-sop/</loc>
+         <lastmod>2026-09-06</lastmod>
+    </url>
+    <url>
+         <loc>https://kms.mansionlai.com/kubevirt/guest-diagnostics-sop/</loc>
+         <lastmod>2026-09-06</lastmod>
+    </url>
+</urlset>
