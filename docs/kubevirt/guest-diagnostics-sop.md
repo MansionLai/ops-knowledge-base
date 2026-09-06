@@ -988,7 +988,7 @@ $aiLines = [System.Collections.Generic.List[string]]::new()
 function AI { param([string]$line = "") $aiLines.Add($line) }
 
 AI "================================================================================"
-AI "  WINDOWS GUEST DIAGNOSTIC SUMMARY — FOR AI-ASSISTED ANALYSIS"
+AI "  WINDOWS GUEST DIAGNOSTIC SUMMARY -- FOR AI-ASSISTED ANALYSIS"
 AI "================================================================================"
 AI "  Computer    : $ComputerName"
 AI "  OS          : $OSCaption"
@@ -998,16 +998,16 @@ AI "  Time Range  : $($dtStart.ToString('yyyy-MM-dd HH:mm')) -> $($dtEnd.ToStrin
 AI "  Run As Admin: $IsAdmin"
 AI "================================================================================"
 AI ""
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  HOW TO USE"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  1. Share this file with an AI assistant (ChatGPT, Claude, Gemini, etc.)"
 AI "  2. Use the prompt template in the next section"
 AI "  3. If the AI needs more detail, share the specific .txt file from the ZIP"
 AI ""
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  PROMPT TEMPLATE (copy and paste to AI, then attach this file)"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI ""
 AI "You are an expert Windows systems administrator performing incident analysis."
 AI "The attached file is a diagnostic summary from a Windows VM (running in a"
@@ -1022,9 +1022,9 @@ AI ""
 AI "If you need more detail on any area, ask me to share the specific log file"
 AI "from the diagnostic ZIP package (e.g. '02_event_logs/system_events.txt')."
 AI ""
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [1] SYSTEM IDENTITY"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     $osObj  = Get-CimInstance Win32_OperatingSystem
     $uptime = $osObj.LocalDateTime - $osObj.LastBootUpTime
@@ -1045,9 +1045,9 @@ try {
 } catch { AI "  [ERROR collecting system identity: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-AI "  [2] ⚠️  AUTO-DETECTED ALERTS"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
+AI "  [2] [!]  AUTO-DETECTED ALERTS"
+AI "------------------------------------------------------------------------------"
 $alertCount = 0
 
 # Disk space alerts
@@ -1056,10 +1056,10 @@ try {
         $freePct = [math]::Round(($_.FreeSpace / $_.Size) * 100, 1)
         $freeGB  = [math]::Round($_.FreeSpace / 1GB, 1)
         if ($freePct -lt 10) {
-            AI "  [DISK CRITICAL] $($_.DeviceID) is $([math]::Round(100-$freePct,1))% full — only $freeGB GB remaining!"
+            AI "  [DISK CRITICAL] $($_.DeviceID) is $([math]::Round(100-$freePct,1))% full -- only $freeGB GB remaining!"
             $alertCount++
         } elseif ($freePct -lt 20) {
-            AI "  [DISK WARNING]  $($_.DeviceID) is $([math]::Round(100-$freePct,1))% full — $freeGB GB remaining"
+            AI "  [DISK WARNING]  $($_.DeviceID) is $([math]::Round(100-$freePct,1))% full -- $freeGB GB remaining"
             $alertCount++
         }
     }
@@ -1086,7 +1086,7 @@ try {
 try {
     $qemuSvc = Get-Service -Name "QEMU-GA" -ErrorAction SilentlyContinue
     if (-not $qemuSvc) {
-        AI "  [QEMU-GA MISSING]  QEMU Guest Agent is NOT installed — KubeVirt memory metrics UNRELIABLE"
+        AI "  [QEMU-GA MISSING]  QEMU Guest Agent is NOT installed -- KubeVirt memory metrics UNRELIABLE"
         $alertCount++
     } elseif ($qemuSvc.Status -ne "Running") {
         AI "  [QEMU-GA STOPPED]  QEMU Guest Agent is installed but NOT running (Status: $($qemuSvc.Status))"
@@ -1129,7 +1129,7 @@ try {
     $dumpPath = "$env:SystemRoot\Minidump"
     if (Test-Path $dumpPath) {
         $recentDumps = (Get-ChildItem $dumpPath -Filter "*.dmp" -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $dtStart -and $_.LastWriteTime -le $dtEnd }).Count
-        if ($recentDumps -gt 0) { AI "  [BSOD DETECTED] $recentDumps minidump file(s) in time range — system experienced BSOD(s)"; $alertCount++ }
+        if ($recentDumps -gt 0) { AI "  [BSOD DETECTED] $recentDumps minidump file(s) in time range -- system experienced BSOD(s)"; $alertCount++ }
     }
 } catch {}
 
@@ -1143,10 +1143,10 @@ try {
 if ($alertCount -eq 0) { AI "  No critical alerts auto-detected." }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [3] CRITICAL EVENTS IN TIME RANGE (Level >= Warning)"
 AI "  Range: $($dtStart.ToString('yyyy-MM-dd HH:mm')) -> $($dtEnd.ToString('yyyy-MM-dd HH:mm'))"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     # Priority Event IDs (OOM, BSOD, Crash, Hang, Kernel)
     $priorityIds = @(41, 6008, 2004, 1001, 1002, 1000, 7034, 7031, 7036, 1074)
@@ -1168,16 +1168,16 @@ try {
             $shortMsg = ($e.Message -replace "`r`n|`n", " ").Substring(0, [Math]::Min(($e.Message -replace "`r`n|`n", " ").Length, 250))
             AI "  [$($e.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss'))] [ID:$($e.Id)] [$($e.LevelDisplayName)] [$($e.LogName)] $shortMsg"
         }
-        if ($priorityEvts.Count -gt 50) { AI "  ... ($(($priorityEvts.Count - 50)) more events — see 02_event_logs/ for full list)" }
+        if ($priorityEvts.Count -gt 50) { AI "  ... ($(($priorityEvts.Count - 50)) more events -- see 02_event_logs/ for full list)" }
     } else {
         AI "  No Warning/Error/Critical events found in the specified time range."
     }
 } catch { AI "  [ERROR collecting events: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [4] TOP 15 PROCESSES BY MEMORY (Working Set)"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     $procs = Get-CimInstance Win32_Process | Sort-Object WorkingSetSize -Descending | Select-Object -First 15
     AI "  {'Rank',-4} {'PID',-7} {'Name',-30} {'WS(MB)',-10} {'CPU(s)',-10} Owner"
@@ -1194,9 +1194,9 @@ try {
 } catch { AI "  [ERROR: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [5] TOP 15 PROCESSES BY CPU TIME"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     $cpuProcs = Get-CimInstance Win32_Process |
         Select-Object ProcessId, Name, WorkingSetSize,
@@ -1212,15 +1212,15 @@ try {
 } catch { AI "  [ERROR: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [6] STORAGE STATUS"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | ForEach-Object {
         $freePct = if ($_.Size -gt 0) { [math]::Round(($_.FreeSpace / $_.Size) * 100, 1) } else { 0 }
         $freeGB  = [math]::Round($_.FreeSpace / 1GB, 1)
         $totalGB = [math]::Round($_.Size / 1GB, 1)
-        $flag = if ($freePct -lt 10) { " ← CRITICAL" } elseif ($freePct -lt 20) { " ← WARNING" } else { "" }
+        $flag = if ($freePct -lt 10) { " <-- CRITICAL" } elseif ($freePct -lt 20) { " <-- WARNING" } else { "" }
         AI "  $($_.DeviceID)  Total: $totalGB GB  Free: $freeGB GB ($freePct%)$flag"
     }
 } catch { AI "  [ERROR: $_]" }
@@ -1232,9 +1232,9 @@ try {
 } catch {}
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-AI "  [7] SERVICES — Auto-start but STOPPED"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
+AI "  [7] SERVICES -- Auto-start but STOPPED"
+AI "------------------------------------------------------------------------------"
 try {
     $knownOk = @("MapsBroker","NetTcpPortSharing","RemoteRegistry","shpamsvc","tzautoupdate",
                  "XblAuthManager","XblGameSave","XboxGipSvc","XboxNetApiSvc","wisvc",
@@ -1250,9 +1250,9 @@ try {
 } catch { AI "  [ERROR: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [8] WER CRASH REPORTS (in time range)"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     $werDirs = @(
         "$env:ProgramData\Microsoft\Windows\WER\ReportQueue",
@@ -1279,9 +1279,9 @@ try {
 } catch { AI "  [ERROR: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [9] STARTUP ITEMS (non-Microsoft / non-Windows)"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     $runKeys = @(
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
@@ -1309,9 +1309,9 @@ try {
 } catch { AI "  [ERROR: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [10] ACTIVE CONNECTIONS (ESTABLISHED, non-loopback)"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     $procMap2 = @{}
     Get-Process | ForEach-Object { $procMap2[$_.Id] = $_.Name }
@@ -1327,14 +1327,14 @@ try {
             $pname  = $procMap2[$c.OwningProcess]
             AI "  $('{0,-25}' -f $local) $('{0,-25}' -f $remote) $('{0,-7}' -f $c.OwningProcess) $pname"
         }
-        if ($conns.Count -gt 40) { AI "  ... ($($conns.Count - 40) more — see 04_network/active_connections.txt)" }
+        if ($conns.Count -gt 40) { AI "  ... ($($conns.Count - 40) more -- see 04_network/active_connections.txt)" }
     } else { AI "  No established non-loopback TCP connections." }
 } catch { AI "  [ERROR: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [11] SECURITY SUMMARY (Event Counts in Time Range)"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     $secIds = @(
         @{Id=4625; Label="Failed Logons (brute force indicator if >10)"},
@@ -1347,20 +1347,20 @@ try {
         try {
             $cnt = (Get-WinEvent -FilterHashtable @{LogName="Security"; Id=$item.Id; StartTime=$dtStart; EndTime=$dtEnd} -ErrorAction Stop).Count
             $flag = ""
-            if ($item.Id -eq 4625 -and $cnt -gt 10) { $flag = " ← SUSPICIOUS" }
-            if ($item.Id -eq 1102 -and $cnt -gt 0)  { $flag = " ← ALERT: LOG TAMPERING" }
-            if ($item.Id -eq 4720 -and $cnt -gt 0)  { $flag = " ← REVIEW REQUIRED" }
-            AI "  ID $($item.Id): $cnt event(s)  — $($item.Label)$flag"
+            if ($item.Id -eq 4625 -and $cnt -gt 10) { $flag = " <-- SUSPICIOUS" }
+            if ($item.Id -eq 1102 -and $cnt -gt 0)  { $flag = " <-- ALERT: LOG TAMPERING" }
+            if ($item.Id -eq 4720 -and $cnt -gt 0)  { $flag = " <-- REVIEW REQUIRED" }
+            AI "  ID $($item.Id): $cnt event(s)  -- $($item.Label)$flag"
         } catch {
-            AI "  ID $($item.Id): (access denied or log unavailable) — $($item.Label)"
+            AI "  ID $($item.Id): (access denied or log unavailable) -- $($item.Label)"
         }
     }
 } catch { AI "  [ERROR collecting security summary: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 AI "  [12] INSTALLED SOFTWARE (Last 30 Days)"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
 try {
     $cutoff = (Get-Date).AddDays(-30).ToString("yyyyMMdd")
     $recentApps = @()
@@ -1378,9 +1378,9 @@ try {
 } catch { AI "  [ERROR: $_]" }
 AI ""
 
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-AI "  END OF SUMMARY — See individual files in ZIP for full details"
-AI "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+AI "------------------------------------------------------------------------------"
+AI "  END OF SUMMARY -- See individual files in ZIP for full details"
+AI "------------------------------------------------------------------------------"
 
 $aiLines | Set-Content -Path $aiFile -Encoding UTF8
 Write-Host "  -> SUMMARY_FOR_AI.txt written ($($aiLines.Count) lines)" -ForegroundColor Green
