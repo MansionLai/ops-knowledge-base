@@ -103,6 +103,73 @@ sequenceDiagram
 
 ---
 
+## Windows VM 歷史事件回溯 SOP（事後分析用）
+
+> [!IMPORTANT]
+> 當使用者在**幾天後才回報**異常，即時採樣腳本已無法捕捉現場。
+> 請改用此腳本，指定事發時間段，從 Windows 內建日誌回溯歷史紀錄。
+
+### 可回溯的歷史資料來源
+
+| 來源 | 預設保留時間 | 能回答什麼問題 |
+| :--- | :--- | :--- |
+| **Event Viewer (WinEvtLog)** | System/Application 預設 20 MB（數週） | OOM 觸發、服務崩潰、異常關機、程式 Hang |
+| **Reliability Monitor** | **28 天** | 每日穩定性評分、應用程式崩潰時間軸 |
+| **Scheduled Task History** | 視設定 | 哪個排程任務在異常時間點執行（備份、掃毒、更新） |
+| **WER Crash Reports** | 視磁碟空間 | 應用程式 Crash Dump、Hang Report |
+| **Windows Minidump** | `C:\Windows\Minidump\` | BSOD 核心轉儲（需額外工具分析） |
+
+### 關鍵 Windows Event ID 對照表
+
+| Event ID | Log | 說明 |
+| :--- | :--- | :--- |
+| **2004** | System | Resource-Exhaustion-Detector：**虛擬記憶體嚴重不足**，**直接列出當時前 3 名元兇** 🔴 |
+| **41** | System | Kernel-Power：非預期關機／重啟（可能由 OOM 導致）🔴 |
+| **6008** | System | 上次關機是非預期的 🔴 |
+| **1001** | Application | BugCheck（藍屏 BSOD）🔴 |
+| **1002** | Application | Application Hang：程式無回應（資源耗盡常見症狀）🟠 |
+| **1000** | Application | Application Error：程式崩潰 🟠 |
+| **7034** | System | 服務意外終止（可能被系統強制終止）🟠 |
+| **1074** | System | 系統被程式或使用者主動重啟 🟡 |
+
+### 使用者操作步驟
+
+1.  **以系統管理員身分開啟 PowerShell**
+
+2.  **下載歷史回溯腳本**：
+    ```powershell
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MansionLai/ops-knowledge-base/main/scripts/guest-diag/collect-windows-history.ps1" -OutFile "$env:TEMP\collect-windows-history.ps1"
+    ```
+
+3.  **執行腳本，並指定事發時間段**：
+    ```powershell
+    # 格式："yyyy-MM-dd HH:mm"，請替換為實際事發時間
+    powershell.exe -ExecutionPolicy Bypass -File "$env:TEMP\collect-windows-history.ps1" `
+        -StartTime "2026-09-04 09:00" `
+        -EndTime   "2026-09-04 13:00"
+    ```
+    *若不確定確切時間，預設查詢最近 3 天：*
+    ```powershell
+    powershell.exe -ExecutionPolicy Bypass -File "$env:TEMP\collect-windows-history.ps1"
+    ```
+
+4.  **產出檔案**：
+    ```text
+    C:\Users\<User>\AppData\Local\Temp\vm_history_<ComputerName>_<timestamp>.zip
+    ```
+
+### 歷史回溯腳本收集內容
+
+| 檔案名稱 | 收集內容 |
+| :--- | :--- |
+| `system_info.txt` | OS 版本、**時區確認**（確保與 Prometheus 時間對齊） |
+| `critical_events.txt` | 指定區間內所有 OOM / BSOD / Hang / 崩潰 / 服務異常 Event |
+| `reliability_history.txt` | 區間內所有 System + Application 告警的時間軸彙整 |
+| `scheduled_tasks_history.txt` | 排程任務執行紀錄（找出是否有排程任務觸發資源飆升） |
+| `wer_crash_reports.txt` | WER Crash Report 清單與 Report.wer 摘要、Minidump 清單 |
+
+---
+
 ## 診斷收集內容清單
 
 腳本打包的檔案中包含以下關鍵資訊：
@@ -166,5 +233,8 @@ sequenceDiagram
 ### Linux 收集腳本 (`collect-linux-diag.sh`)
 完整腳本位於儲存庫 [`scripts/guest-diag/collect-linux-diag.sh`](https://github.com/MansionLai/ops-knowledge-base/blob/main/scripts/guest-diag/collect-linux-diag.sh)。
 
-### Windows 收集腳本 (`collect-windows-diag.ps1`)
+### Windows 即時採樣腳本 (`collect-windows-diag.ps1`)
 完整腳本位於儲存庫 [`scripts/guest-diag/collect-windows-diag.ps1`](https://github.com/MansionLai/ops-knowledge-base/blob/main/scripts/guest-diag/collect-windows-diag.ps1)。
+
+### Windows 歷史回溯腳本 (`collect-windows-history.ps1`)
+完整腳本位於儲存庫 [`scripts/guest-diag/collect-windows-history.ps1`](https://github.com/MansionLai/ops-knowledge-base/blob/main/scripts/guest-diag/collect-windows-history.ps1)。
